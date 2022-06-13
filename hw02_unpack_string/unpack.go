@@ -9,6 +9,15 @@ import (
 
 var ErrInvalidString = errors.New("invalid string")
 
+var ShieldSlash = `\`
+
+type iteratorData struct {
+	prevRune      int32
+	currentRune   int32
+	nextRune      int32
+	slashSequence int
+}
+
 func copySign(asRune int32, count int) string {
 	return strings.Repeat(string(asRune), count)
 }
@@ -40,7 +49,7 @@ func checkFirstSign(asRune []rune) error {
 func Unpack(phrase string) (string, error) {
 	var b strings.Builder
 	var err error
-	var slashSequence int8
+	var slashSequence int
 	shieldSlash := `\`
 	asRune := []rune(phrase)
 
@@ -75,25 +84,49 @@ func Unpack(phrase string) (string, error) {
 			slashSequence = 0
 		}
 
-		if unicode.IsDigit(nextRune) {
-			countOfRepeat, _ := strconv.Atoi(string(nextRune))
-			if string(currentRune) != shieldSlash {
-				if string(prevRune) == shieldSlash {
-					countOfRepeat--
-				}
-				b.WriteString(copySign(currentRune, countOfRepeat))
-			} else if slashSequence > 2 {
-				b.WriteString(shieldSlash)
-				b.WriteRune(nextRune)
-			} else if string(prevRune) == shieldSlash {
-				b.WriteString(copySign(currentRune, countOfRepeat))
-			} else {
-				b.WriteRune(nextRune)
-			}
-		} else if !unicode.IsDigit(currentRune) && string(currentRune) != shieldSlash {
-			b.WriteRune(currentRune)
+		isDigitNext := unicode.IsDigit(nextRune)
+		data := iteratorData{
+			prevRune,
+			currentRune,
+			nextRune,
+			slashSequence,
+		}
+		if isDigitNext {
+			bFormedByNext(data, &b)
+		} else {
+			bFormedByCurrent(data, &b)
 		}
 	}
 
 	return b.String(), nil
+}
+
+func bFormedByNext(data iteratorData, b *strings.Builder) {
+	countOfRepeat, _ := strconv.Atoi(string(data.nextRune))
+	switch string(data.currentRune) != ShieldSlash {
+	case true:
+		if string(data.prevRune) == ShieldSlash {
+			countOfRepeat--
+		}
+		b.WriteString(copySign(data.currentRune, countOfRepeat))
+	case false:
+		if data.slashSequence > 2 {
+			b.WriteString(ShieldSlash)
+			b.WriteRune(data.nextRune)
+		}
+
+		if data.slashSequence <= 2 && string(data.prevRune) == ShieldSlash {
+			b.WriteString(copySign(data.currentRune, countOfRepeat))
+		}
+
+		if data.slashSequence <= 2 && string(data.prevRune) != ShieldSlash {
+			b.WriteRune(data.nextRune)
+		}
+	}
+}
+
+func bFormedByCurrent(data iteratorData, b *strings.Builder) {
+	if !unicode.IsDigit(data.currentRune) && string(data.currentRune) != ShieldSlash {
+		b.WriteRune(data.currentRune)
+	}
 }
